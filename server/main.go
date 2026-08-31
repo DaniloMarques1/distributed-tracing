@@ -26,7 +26,6 @@ func main() {
 
 func calculate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "Application/json")
-	log.Println("Opa")
 	log.Println(r.Header)
 	w.Write([]byte("{\"message\": \"OK\"}"))
 }

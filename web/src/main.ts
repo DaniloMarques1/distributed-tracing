@@ -1,6 +1,3 @@
-type ArithmeticOperation = 'soma' | 'subtracao' | 'multiplicacao' | 'divisao';
-
-const form = document.querySelector<HTMLFormElement>('#meu-formulario');
 import { WebTracerProvider } from '@opentelemetry/sdk-trace-web';
 import { ZoneContextManager } from '@opentelemetry/context-zone';
 import {
@@ -28,6 +25,10 @@ registerInstrumentations({
     }),
   ],
 });
+
+type ArithmeticOperation = 'soma' | 'subtracao' | 'multiplicacao' | 'divisao';
+
+const form = document.querySelector<HTMLFormElement>('#meu-formulario');
 
 const form1 = document.querySelector<HTMLInputElement>('#campo1');
 const form2 = document.querySelector<HTMLInputElement>('#campo2');
