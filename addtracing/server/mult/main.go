@@ -20,7 +20,7 @@ type ErrorResponse struct {
 }
 
 func main() {
-	http.HandleFunc("/calculate", handleFunc)
+	http.HandleFunc("POST /calculate", handleFunc)
 
 	log.Fatal(http.ListenAndServe(":3002", nil))
 }
