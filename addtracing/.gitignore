@@ -1,1 +1,6 @@
 web/node_modules/*
+server/sum/sum
+server/mult/mult
+server/div/div
+server/sub/sub
+server/calculate
