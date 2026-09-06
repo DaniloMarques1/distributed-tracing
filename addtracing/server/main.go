@@ -1,15 +1,38 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	yaml "gopkg.in/yaml.v3"
 )
 
+type ServerInfo struct {
+	Host string `yaml:"host"`
+	Port int    `yaml:"port"`
+}
+
+var config map[string]ServerInfo
+
 func main() {
+	yamlFile, err := os.ReadFile("./servers.yaml")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	config = make(map[string]ServerInfo)
+	if err := yaml.Unmarshal(yamlFile, &config); err != nil {
+		log.Fatal(err)
+	}
+
 	mux := http.NewServeMux()
 	server := &http.Server{
 		Addr:         ":8080",
@@ -19,17 +42,20 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
-	mux.HandleFunc("POST /calculate", calculate)
+	mux.HandleFunc("POST /calculate", handleCalculate)
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
-
 }
 
-type Request struct {
+type ClientRequest struct {
 	Operands string `json:"operands"`
 	Operator string `json:"operator"`
+}
+
+type ApiRequest struct {
+	Numbers []float64
 }
 
 type ErrorMessage struct {
@@ -37,86 +63,71 @@ type ErrorMessage struct {
 }
 
 type Response struct {
-	Result float64
+	Result float64 `json:"result"`
 }
 
-type Math interface {
-	Calculate(numbersStr string) float64
-}
-
-type baseMathOperator struct {
-}
-
-func (s *baseMathOperator) CalculateGeneric(numbersStr string, f func(a, b float64) float64) float64 {
-	result := float64(0)
-	numbers := strings.Split(numbersStr, ",")
-	for _, number := range numbers {
-		n, err := strconv.ParseFloat(number, 64)
-		if err == nil {
-			result = f(result, n)
+// convertToFloat convert numbers such 1,2,3 to an array of float64
+func convertToFloat(numbersStr string) []float64 {
+	numbers := make([]float64, 0)
+	arr := strings.Split(numbersStr, ",")
+	for _, number := range arr {
+		n, err := strconv.ParseFloat(strings.TrimSpace(number), 64)
+		if err != nil {
+			continue
 		}
+		numbers = append(numbers, n)
 	}
 
-	return result
+	return numbers
 }
 
-type sumMathOeprator struct{}
-type multMathOperator struct{}
-
-func doMath(numbersStr string, f func(a, b float64) float64) float64 {
-	result := float64(0)
-	numbers := strings.Split(numbersStr, ",")
-	for idx, number := range numbers {
-		n, err := strconv.ParseFloat(number, 64)
-		if err == nil {
-			if idx == 0 {
-				result = n
-				continue
-			}
-			result = f(result, n)
-		}
-	}
-
-	return result
-}
-
-func (s *sumMathOeprator) Calculate(numbersStr string) float64 {
-	return doMath(numbersStr, func(a, b float64) float64 {
-		return a + b
-	})
-}
-
-func (m *multMathOperator) Calculate(numbersStr string) float64 {
-	return doMath(numbersStr, func(a, b float64) float64 {
-		return a * b
-	})
-}
-
-func GetMathOperator(operator string) Math {
-	switch operator {
-	case "sum":
-		return &sumMathOeprator{}
-	case "mult":
-		return &multMathOperator{}
-	default:
-		return nil
-	}
-
-}
-
-func calculate(w http.ResponseWriter, r *http.Request) {
+func handleCalculate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "Application/json")
-	var request *Request
+	var request *ClientRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		sendError(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
-	math := GetMathOperator(request.Operator)
-	result := math.Calculate(request.Operands)
+	numbers := convertToFloat(request.Operands)
+	apiRequest := ApiRequest{Numbers: numbers}
 
-	response := &Response{Result: result}
+	serverInfo, exists := config[request.Operator]
+	if !exists {
+		sendError(w, "Wrong operator", http.StatusBadRequest)
+		return
+	}
+
+	url := fmt.Sprintf("http://%v:%v/calculate", serverInfo.Host, serverInfo.Port)
+	b, err := json.Marshal(apiRequest)
+	if err != nil {
+		sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(b))
+	if err != nil {
+		sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		sendError(w, "Wrong status code", resp.StatusCode)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
-	send(w, response)
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func sendError(w http.ResponseWriter, message string, statusCode int) {

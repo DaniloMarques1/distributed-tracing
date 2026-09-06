@@ -1,0 +1,12 @@
+sum:
+  host: localhost
+  port: 3000
+sub:
+  host: localhost
+  port: 3001
+mult:
+  host: localhost
+  port: 3002
+div:
+  host: localhost
+  port: 3003
