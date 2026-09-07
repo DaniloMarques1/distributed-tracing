@@ -123,6 +123,8 @@ func handleCalculate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "Application/json")
 	var request *ClientRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		span.SetStatus(codes.Error, err.Error())
+		span.RecordError(err)
 		sendError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
