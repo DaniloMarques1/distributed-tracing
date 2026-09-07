@@ -3,36 +3,203 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Formulário TypeScript</title>
+    <title>Calculadora de Sequência</title>
+    <!-- Fontes do Google -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --bg-color: #0f172a;
+        --card-bg: #1e293b;
+        --border-color: #334155;
+        --text-primary: #f8fafc;
+        --text-secondary: #94a3b8;
+        --accent-color: #38bdf8;
+        --accent-hover: #0284c7;
+        --error-color: #f87171;
+        --success-bg: #0f172a;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family:
+          'Inter',
+          system-ui,
+          -apple-system,
+          sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-primary);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        padding: 1.5rem;
+      }
+
+      .card {
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 2rem;
+        width: 100%;
+        max-width: 460px;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      }
+
+      h2 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        color: var(--text-primary);
+      }
+
+      p.subtitle {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .form-group {
+        margin-bottom: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      label {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+      }
+
+      input[type='text'],
+      select {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-size: 0.95rem;
+        font-family: inherit;
+        outline: none;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+      }
+
+      input[type='text']:focus,
+      select:focus {
+        border-color: var(--accent-color);
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+      }
+
+      button[type='submit'] {
+        width: 100%;
+        padding: 0.875rem;
+        background-color: var(--accent-color);
+        color: #0f172a;
+        font-weight: 600;
+        font-size: 1rem;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition:
+          background-color 0.2s,
+          transform 0.1s;
+        margin-top: 0.5rem;
+      }
+
+      button[type='submit']:hover {
+        background-color: var(--accent-hover);
+      }
+
+      button[type='submit']:active {
+        transform: scale(0.98);
+      }
+
+      #resposta {
+        margin-top: 1.5rem;
+        padding: 1rem;
+        border-radius: 8px;
+        background-color: var(--success-bg);
+        border: 1px solid var(--border-color);
+        display: none;
+      }
+
+      #resposta.active {
+        display: block;
+      }
+
+      .result-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-secondary);
+        margin-bottom: 0.25rem;
+      }
+
+      .result-value {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--accent-color);
+        word-break: break-all;
+      }
+
+      .error-message {
+        color: var(--error-color);
+        font-size: 0.875rem;
+      }
+    </style>
   </head>
   <body>
-    <h2>Envio de Dados</h2>
+    <main class="card">
+      <h2>Calculadora de Operações</h2>
+      <p class="subtitle">
+        Insira uma lista de números separados por vírgula e escolha a operação.
+      </p>
 
-    <form id="meu-formulario">
-      <div>
-        <label for="campo1">Número 1:</label>
-        <input type="number" id="campo1" name="campo1" step="any" required />
-      </div>
-      <br />
-      <div>
-        <label for="operacao">Operação:</label>
-        <select id="operacao" name="operacao" required>
-          <option value="soma">Soma (+)</option>
-          <option value="subtracao">Subtração (-)</option>
-          <option value="multiplicacao">Multiplicação (x)</option>
-          <option value="divisao">Divisão (/)</option>
-        </select>
-      </div>
-      <br />
-      <div>
-        <label for="campo2">Número 2:</label>
-        <input type="number" id="campo2" name="campo2" step="any" required />
-      </div>
-      <br />
-      <button type="submit">Calcular / Enviar</button>
-    </form>
+      <form id="meu-formulario">
+        <div class="form-group">
+          <label for="campo1">Números (separados por vírgula):</label>
+          <input
+            type="text"
+            id="campo1"
+            name="campo1"
+            placeholder="Ex: 10, 20.5, 30"
+            required
+          />
+        </div>
 
-    <div id="resposta" style="margin-top: 15px"></div>
+        <div class="form-group">
+          <label for="operacao">Operação:</label>
+          <select id="operacao" name="operacao" required>
+            <option value="sum">Soma (+)</option>
+            <option value="sub">Subtração (-)</option>
+            <option value="mult">Multiplicação (x)</option>
+            <option value="div">Divisão (/)</option>
+          </select>
+        </div>
+
+        <button type="submit">Calcular</button>
+      </form>
+
+      <div id="resposta">
+        <div class="result-label">Resultado:</div>
+        <div id="resultado-conteudo" class="result-value"></div>
+      </div>
+    </main>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -26,13 +26,15 @@ registerInstrumentations({
   ],
 });
 
-type ArithmeticOperation = 'soma' | 'subtracao' | 'multiplicacao' | 'divisao';
+type ArithmeticOperation = 'sum' | 'sub' | 'mult' | 'div';
 
 const form = document.querySelector<HTMLFormElement>('#meu-formulario');
-
-const form1 = document.querySelector<HTMLInputElement>('#campo1');
-const form2 = document.querySelector<HTMLInputElement>('#campo2');
+const input = document.querySelector<HTMLInputElement>('#campo1');
 const operacao = document.querySelector<HTMLSelectElement>('#operacao');
+const respostaDiv = document.querySelector<HTMLDivElement>('#resposta');
+const resultadoConteudo = document.querySelector<HTMLDivElement>(
+  '#resultado-conteudo',
+);
 
 form.addEventListener('submit', printInputValues);
 
@@ -46,10 +48,16 @@ async function printInputValues(event) {
   event.preventDefault();
 
   await tracer.startActiveSpan('calc-request', async (span) => {
+    const operands = input.value
+      .split(',')
+      .map((item) => item.trim())
+      .filter((item) => item !== '')
+      .map(Number)
+      .join(',');
+
     const request: CalculateRequest = {
-      firstValue: form1.value,
-      secondValue: form2.value,
-      operacao: operacao.value,
+      operands,
+      operator: operacao.value as ArithmeticOperation,
     };
 
     try {
@@ -61,10 +69,16 @@ async function printInputValues(event) {
         body: JSON.stringify(request),
       });
       const data = await response.json();
-      console.log(data);
+
+      respostaDiv.classList.add('active');
+      resultadoConteudo.className = 'result-value';
+      resultadoConteudo.textContent =
+        data.result !== undefined ? data.result : JSON.stringify(data);
+
       span.addEvent('request-completed');
     } catch (ex: Error) {
       console.log(ex);
+      //TODO show something
       span.recordException(ex);
     } finally {
       span.end();

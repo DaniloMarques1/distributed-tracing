@@ -2,16 +2,23 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
+	"danilo.marques/calculate/tracing"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -23,6 +30,9 @@ type ServerInfo struct {
 var config map[string]ServerInfo
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	yamlFile, err := os.ReadFile("./servers.yaml")
 	if err != nil {
 		log.Fatal(err)
@@ -30,6 +40,11 @@ func main() {
 
 	config = make(map[string]ServerInfo)
 	if err := yaml.Unmarshal(yamlFile, &config); err != nil {
+		log.Fatal(err)
+	}
+
+	shutdown, err := tracing.InitTracer(ctx, "calculate")
+	if err != nil {
 		log.Fatal(err)
 	}
 
@@ -42,11 +57,31 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
-	mux.HandleFunc("POST /calculate", handleCalculate)
+	handler := otelhttp.NewHandler(http.HandlerFunc(handleCalculate), "calculate")
+	mux.Handle("POST /calculate", handler)
 
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatal(err)
+	go func() {
+		log.Println("Server running on port 8080")
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal(err)
+		}
+	}()
+
+	<-ctx.Done()
+	log.Println("Shutting down gracefully")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("HTTP shutdown error %v\n", err)
 	}
+
+	if err := shutdown(shutdownCtx); err != nil {
+		log.Printf("Tracer shutdown error %v\n", err)
+	}
+
+	log.Println("Server exited")
 }
 
 type ClientRequest struct {
@@ -82,6 +117,9 @@ func convertToFloat(numbersStr string) []float64 {
 }
 
 func handleCalculate(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	span := trace.SpanFromContext(ctx)
+
 	w.Header().Set("Content-Type", "Application/json")
 	var request *ClientRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -94,6 +132,7 @@ func handleCalculate(w http.ResponseWriter, r *http.Request) {
 
 	serverInfo, exists := config[request.Operator]
 	if !exists {
+		span.SetStatus(codes.Error, "server does not exist")
 		sendError(w, "Wrong operator", http.StatusBadRequest)
 		return
 	}
@@ -101,30 +140,40 @@ func handleCalculate(w http.ResponseWriter, r *http.Request) {
 	url := fmt.Sprintf("http://%v:%v/calculate", serverInfo.Host, serverInfo.Port)
 	b, err := json.Marshal(apiRequest)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		sendError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(b))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(b))
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		sendError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
+	resp, err := client.Do(req)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		sendError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		span.SetStatus(codes.Error, fmt.Sprintf("Wrong status code returned %v", resp.StatusCode))
 		sendError(w, "Wrong status code", resp.StatusCode)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 	if _, err := io.Copy(w, resp.Body); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		sendError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
